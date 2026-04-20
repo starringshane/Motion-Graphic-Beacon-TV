@@ -3,7 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <title>BeaconTV — Teaser</title>
-<meta name="viewport" id="vp" content="width=1080, initial-scale=1" />
+<script>
+  // Emit viewport meta synchronously based on ?fit=1, before layout.
+  (function () {
+    var fit = new URLSearchParams(location.search).has('fit');
+    if (fit) document.documentElement.className += ' fit';
+    document.write(
+      '<meta name="viewport" content="' +
+      (fit
+        ? 'width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no'
+        : 'width=1080, initial-scale=1') +
+      '">'
+    );
+  })();
+</script>
 <style>
   :root {
     --bg: #05070a;
@@ -25,15 +38,19 @@
   }
 
   /* ?fit=1 — scale the 1080x1920 stage to fill the device viewport */
-  body.fit {
+  html.fit, html.fit body {
     width: 100vw;
     height: 100dvh;
+    overflow: hidden;
+  }
+  html.fit body {
     display: grid;
     place-items: center;
   }
-  body.fit .stage {
+  html.fit .stage {
     transform-origin: center center;
     transform: scale(var(--s, 1));
+    flex: none;
   }
 
   /* Stage: locked to 1080x1920 (9:16 for Reels / Shorts / TikTok) */
@@ -518,23 +535,22 @@
 
 <script>
   // ?fit=1 → scale the 1080x1920 stage to fit the viewport (phones, embeds).
+  // The viewport meta was already set synchronously in <head>, and <html> got
+  // the .fit class there too, so we only need to keep --s in sync here.
   (function () {
-    var params = new URLSearchParams(location.search);
-    if (!params.has('fit')) return;
-    document.body.classList.add('fit');
-    // Let the meta viewport use the real device width so the scale math is correct.
-    var vp = document.getElementById('vp');
-    if (vp) vp.setAttribute('content',
-      'width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no');
+    if (!document.documentElement.classList.contains('fit')) return;
     function fit() {
       var vw = window.innerWidth;
       var vh = window.innerHeight;
       var s = Math.min(vw / 1080, vh / 1920);
-      document.body.style.setProperty('--s', s);
+      document.documentElement.style.setProperty('--s', s);
     }
     fit();
     window.addEventListener('resize', fit);
-    window.addEventListener('orientationchange', fit);
+    window.addEventListener('orientationchange', function () {
+      // iOS Safari reports old innerHeight until after the event settles.
+      setTimeout(fit, 250);
+    });
   })();
 </script>
 
