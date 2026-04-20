@@ -37,20 +37,22 @@
     color: var(--ink);
   }
 
-  /* ?fit=1 — scale the 1080x1920 stage to fill the device viewport */
+  /* ?fit=1 — scale the 1080x1920 stage to fill the device viewport.
+     Uses absolute positioning + a single transform for the pin and the scale.
+     iOS Safari mis-centers oversized grid items; this path is reliable. */
   html.fit, html.fit body {
     width: 100vw;
     height: 100dvh;
     overflow: hidden;
-  }
-  html.fit body {
-    display: grid;
-    place-items: center;
+    position: fixed;
+    top: 0; left: 0;
   }
   html.fit .stage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--s, 1));
     transform-origin: center center;
-    transform: scale(var(--s, 1));
-    flex: none;
   }
 
   /* Stage: locked to 1080x1920 (9:16 for Reels / Shorts / TikTok) */
