@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <title>BeaconTV — Teaser</title>
-<meta name="viewport" content="width=1080, initial-scale=1" />
+<meta name="viewport" id="vp" content="width=1080, initial-scale=1" />
 <style>
   :root {
     --bg: #05070a;
@@ -22,6 +22,18 @@
     overflow: hidden;
     font-family: system-ui, -apple-system, Segoe UI, Inter, Roboto, sans-serif;
     color: var(--ink);
+  }
+
+  /* ?fit=1 — scale the 1080x1920 stage to fill the device viewport */
+  body.fit {
+    width: 100vw;
+    height: 100dvh;
+    display: grid;
+    place-items: center;
+  }
+  body.fit .stage {
+    transform-origin: center center;
+    transform: scale(var(--s, 1));
   }
 
   /* Stage: locked to 1080x1920 (9:16 for Reels / Shorts / TikTok) */
@@ -503,6 +515,28 @@
     </div>
   </div>
 </div>
+
+<script>
+  // ?fit=1 → scale the 1080x1920 stage to fit the viewport (phones, embeds).
+  (function () {
+    var params = new URLSearchParams(location.search);
+    if (!params.has('fit')) return;
+    document.body.classList.add('fit');
+    // Let the meta viewport use the real device width so the scale math is correct.
+    var vp = document.getElementById('vp');
+    if (vp) vp.setAttribute('content',
+      'width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no');
+    function fit() {
+      var vw = window.innerWidth;
+      var vh = window.innerHeight;
+      var s = Math.min(vw / 1080, vh / 1920);
+      document.body.style.setProperty('--s', s);
+    }
+    fit();
+    window.addEventListener('resize', fit);
+    window.addEventListener('orientationchange', fit);
+  })();
+</script>
 
 <script>
   // Animated fog + static on canvas (kept lightweight, deterministic enough for capture)
