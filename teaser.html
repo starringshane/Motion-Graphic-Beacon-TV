@@ -13,8 +13,11 @@
     --blood: #b8121a;
     --beacon: #ffb347;
     --fog: rgba(255,255,255,0.04);
-    --serif: "Cormorant Garamond", "Playfair Display", Georgia, serif;
-    --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+    /* System fonts only — already resident on iOS/macOS, so no web-font
+       fetch, no FOUT, no memory hit. Didot gives editorial true-crime drama;
+       Menlo gives case-file / terminal REC-tape energy. */
+    --serif: Didot, "Bodoni 72", Baskerville, "Hoefler Text", Georgia, "Times New Roman", serif;
+    --mono: Menlo, "Courier New", ui-monospace, monospace;
   }
 
   html, body {
@@ -411,9 +414,41 @@
   .stage.ready .ticker,
   .stage.ready .handle,
   .stage.ready .progress { will-change: transform, opacity; }
+
+  /* "Tap for sound" hint — browsers block AudioContext until user gesture */
+  .audio-hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+    transform: translateX(-50%);
+    z-index: 100;
+    font-family: var(--mono);
+    font-size: 14px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: #e6e9ee;
+    background: rgba(10,12,16,0.6);
+    padding: 10px 18px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 999px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: audioHintPulse 1.8s ease-in-out infinite;
+    transition: opacity 420ms ease;
+  }
+  .audio-hint::before {
+    content: "♪";
+    margin-right: 10px;
+    color: var(--beacon);
+    letter-spacing: 0;
+  }
+  .audio-hint.gone { opacity: 0; pointer-events: none; }
+  @keyframes audioHintPulse { 50% { opacity: 0.55; } }
 </style>
 </head>
 <body>
+<div class="audio-hint" id="audio-hint">Tap for sound</div>
+
 <div class="stage ready" id="stage">
   <div class="progress"></div>
 
@@ -587,6 +622,133 @@
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+  })();
+</script>
+
+<script>
+  // Creepy ambient engine — synthesized entirely with Web Audio, no assets.
+  // Layers: detuned sub drone (beating), filtered saw pad with slow LFO
+  // sweep, lowpassed noise bed, slow double-thump heartbeat, and sparse
+  // dissonant high bells. Starts on first tap (browsers block AudioContext
+  // until user gesture).
+  (function () {
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+
+    var hint = document.getElementById('audio-hint');
+    var started = false;
+
+    function start() {
+      if (started) return;
+      started = true;
+      if (hint) hint.classList.add('gone');
+
+      var ctx = new AudioCtx();
+      var master = ctx.createGain();
+      master.gain.value = 0;
+      master.connect(ctx.destination);
+
+      // Gentle fade-in so the hit isn't jarring.
+      var T0 = ctx.currentTime;
+      master.gain.linearRampToValueAtTime(0.55, T0 + 1.6);
+
+      // --- 1. Sub drone: two detuned sines (beating = unease) ---
+      [55, 55.35].forEach(function (f) {
+        var o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = f;
+        var g = ctx.createGain();
+        g.gain.value = 0.42;
+        o.connect(g).connect(master);
+        o.start(T0);
+      });
+
+      // --- 2. Filtered saw pad with a slow cutoff LFO ---
+      var pad = ctx.createOscillator();
+      pad.type = 'sawtooth';
+      pad.frequency.value = 110;
+      var padFilt = ctx.createBiquadFilter();
+      padFilt.type = 'lowpass';
+      padFilt.frequency.value = 340;
+      padFilt.Q.value = 5;
+      var padGain = ctx.createGain();
+      padGain.gain.value = 0.07;
+      pad.connect(padFilt).connect(padGain).connect(master);
+      pad.start(T0);
+
+      var lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.07;
+      var lfoDepth = ctx.createGain();
+      lfoDepth.gain.value = 160;
+      lfo.connect(lfoDepth).connect(padFilt.frequency);
+      lfo.start(T0);
+
+      // --- 3. Lowpassed noise bed (tape hiss / wind) ---
+      var noiseBuf = ctx.createBuffer(1, 2 * ctx.sampleRate, ctx.sampleRate);
+      var nd = noiseBuf.getChannelData(0);
+      for (var i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * 0.6;
+      var noise = ctx.createBufferSource();
+      noise.buffer = noiseBuf;
+      noise.loop = true;
+      var noiseFilt = ctx.createBiquadFilter();
+      noiseFilt.type = 'lowpass';
+      noiseFilt.frequency.value = 900;
+      var noiseGain = ctx.createGain();
+      noiseGain.gain.value = 0.045;
+      noise.connect(noiseFilt).connect(noiseGain).connect(master);
+      noise.start(T0);
+
+      // --- 4. Heartbeat thumps (double-kick, slow tempo) ---
+      function thump(t, vel) {
+        var k = ctx.createOscillator();
+        k.type = 'sine';
+        k.frequency.setValueAtTime(68, t);
+        k.frequency.exponentialRampToValueAtTime(32, t + 0.22);
+        var g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(vel, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+        k.connect(g).connect(master);
+        k.start(t);
+        k.stop(t + 0.42);
+      }
+      var t = T0 + 2.0;
+      for (var b = 0; b < 120; b++) {
+        thump(t,        0.55);
+        thump(t + 0.42, 0.35);
+        t += 2.4;
+      }
+
+      // --- 5. Sparse dissonant bells at random intervals ---
+      function bell(t, freq) {
+        var b = ctx.createOscillator();
+        b.type = 'sine';
+        b.frequency.value = freq;
+        var g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.14, t + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 3.8);
+        b.connect(g).connect(master);
+        b.start(t);
+        b.stop(t + 4.0);
+      }
+      var bellFreqs = [740, 932, 1109, 1318];   // Ab5, Bb5, C#6, E6 — unsettling cluster
+      var bt = T0 + 4.5;
+      while (bt < T0 + 240) {
+        bell(bt, bellFreqs[(Math.random() * bellFreqs.length) | 0]);
+        bt += 4 + Math.random() * 5;
+      }
+    }
+
+    function onGesture() {
+      start();
+      window.removeEventListener('click', onGesture, true);
+      window.removeEventListener('touchstart', onGesture, true);
+      window.removeEventListener('keydown', onGesture, true);
+    }
+    window.addEventListener('click', onGesture, true);
+    window.addEventListener('touchstart', onGesture, true);
+    window.addEventListener('keydown', onGesture, true);
   })();
 </script>
 </body>
