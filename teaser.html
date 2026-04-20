@@ -55,75 +55,34 @@
     isolation: isolate;
   }
 
-  /* --- Atmosphere layers --- */
-  .grain, .vignette, .fog, .scan, .flicker {
+  /* --- Atmosphere (static-only for iOS stability) ---
+     Everything here is a cached CSS gradient — no canvas, no mix-blend-mode,
+     no infinite animation. Keeps GPU layer count low so Safari doesn't OOM. */
+  .vignette, .fog, .scan {
     position: absolute; inset: 0; pointer-events: none;
   }
   .vignette {
     background:
-      radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.85) 100%);
+      radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 42%, rgba(0,0,0,0.9) 100%);
     z-index: 40;
-  }
-  .grain {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.35 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-    mix-blend-mode: overlay;
-    opacity: 0.35;
-    z-index: 41;
-    animation: grainShift 0.12s steps(2) infinite;
-  }
-  @keyframes grainShift {
-    0%   { transform: translate(0,0); }
-    50%  { transform: translate(-6px, 4px); }
-    100% { transform: translate(4px, -3px); }
   }
   .scan {
     background: repeating-linear-gradient(
       to bottom,
-      rgba(255,255,255,0.02) 0px,
-      rgba(255,255,255,0.02) 1px,
+      rgba(255,255,255,0.04) 0px,
+      rgba(255,255,255,0.04) 1px,
       rgba(0,0,0,0) 2px,
       rgba(0,0,0,0) 4px
     );
     z-index: 42;
-    mix-blend-mode: screen;
-    opacity: 0.6;
-  }
-  .flicker {
-    background: #fff;
-    z-index: 43;
-    opacity: 0;
-    mix-blend-mode: overlay;
-    animation: flicker 7s linear infinite;
-  }
-  @keyframes flicker {
-    0%, 3%, 6%, 100% { opacity: 0; }
-    3.2% { opacity: 0.08; }
-    6.1% { opacity: 0.12; }
-    45%  { opacity: 0; }
-    45.1%{ opacity: 0.05; }
-    45.3%{ opacity: 0; }
+    opacity: 0.5;
   }
   .fog {
     background:
-      radial-gradient(ellipse at 20% 80%, rgba(184,18,26,0.15), transparent 55%),
-      radial-gradient(ellipse at 80% 20%, rgba(255,179,71,0.08), transparent 60%),
-      radial-gradient(ellipse at 50% 110%, rgba(255,255,255,0.05), transparent 50%);
+      radial-gradient(ellipse at 20% 80%, rgba(184,18,26,0.25), transparent 55%),
+      radial-gradient(ellipse at 80% 20%, rgba(255,179,71,0.13), transparent 60%),
+      radial-gradient(ellipse at 50% 110%, rgba(255,255,255,0.06), transparent 50%);
     z-index: 5;
-    animation: drift 18s ease-in-out infinite alternate;
-  }
-  @keyframes drift {
-    0%   { transform: translate(-30px, -20px) scale(1.05); }
-    100% { transform: translate(30px, 20px) scale(1.1); }
-  }
-
-  /* Canvas is rendered at half res (540x960) and stretched to fill the
-     stage — keeps GPU memory low enough for iOS Safari. */
-  canvas.fx {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    z-index: 6;
-    mix-blend-mode: screen;
-    opacity: 0.55;
   }
 
   /* --- Scenes --- */
@@ -190,24 +149,25 @@
     filter: drop-shadow(0 0 40px rgba(255,179,71,0.35));
   }
   .beacon-mark svg { width: 100%; height: 100%; }
+  /* Smaller, non-blended beam so iOS doesn't allocate a gigantic compositor
+     layer. 800x800 instead of 1600x1600 and no mix-blend-mode. */
   .beam {
     position: absolute;
     left: 50%; top: 50%;
-    width: 1600px; height: 1600px;
+    width: 800px; height: 800px;
     transform: translate(-50%, -50%);
     background:
       conic-gradient(from 0deg,
         rgba(255,179,71,0) 0deg,
-        rgba(255,179,71,0.22) 10deg,
+        rgba(255,179,71,0.28) 10deg,
         rgba(255,179,71,0) 22deg,
         rgba(255,179,71,0) 180deg,
-        rgba(255,179,71,0.22) 190deg,
+        rgba(255,179,71,0.28) 190deg,
         rgba(255,179,71,0) 202deg,
         rgba(255,179,71,0) 360deg);
     border-radius: 50%;
-    mix-blend-mode: screen;
-    animation: sweep 4s linear infinite;
-    opacity: 0.9;
+    animation: sweep 5s linear infinite;
+    opacity: 0.85;
     z-index: -1;
   }
   @keyframes sweep { to { transform: translate(-50%, -50%) rotate(360deg); } }
@@ -240,19 +200,22 @@
   .pillar {
     font-family: var(--serif);
     font-weight: 700;
-    font-size: 150px;
+    font-size: 128px;
     line-height: 0.95;
     text-align: center;
-    letter-spacing: 0.02em;
+    letter-spacing: 0;
     position: relative;
+    white-space: nowrap;
   }
+  /* PARANORMAL is the longest word — nudge it smaller so Didot fits */
+  .pillar.white { font-size: 118px; }
   .pillar::after {
     content: attr(data-ghost);
     position: absolute;
     inset: 0;
     color: transparent;
-    -webkit-text-stroke: 1px rgba(255,255,255,0.12);
-    transform: translate(6px, 6px);
+    -webkit-text-stroke: 1px rgba(255,255,255,0.14);
+    transform: translate(5px, 5px);
     pointer-events: none;
   }
   .pillar.red    { color: var(--blood); text-shadow: 0 0 24px rgba(184,18,26,0.4); }
@@ -431,8 +394,7 @@
     padding: 10px 18px;
     border: 1px solid rgba(255,255,255,0.18);
     border-radius: 999px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    /* No backdrop-filter — iOS Safari can OOM on large blurred layers */
     animation: audioHintPulse 1.8s ease-in-out infinite;
     transition: opacity 420ms ease;
   }
@@ -452,12 +414,9 @@
 <div class="stage ready" id="stage">
   <div class="progress"></div>
 
-  <!-- atmosphere -->
+  <!-- atmosphere (static CSS only — no canvas, no infinite animations) -->
   <div class="fog"></div>
-  <canvas class="fx" id="fx" width="540" height="960"></canvas>
   <div class="scan"></div>
-  <div class="grain"></div>
-  <div class="flicker"></div>
   <div class="vignette"></div>
 
   <!-- persistent framing -->
@@ -575,53 +534,6 @@
       // iOS Safari reports old innerHeight until after the event settles.
       setTimeout(fit, 250);
     });
-  })();
-</script>
-
-<script>
-  // Animated fog on a half-res canvas (540x960) stretched to fill the stage.
-  // Frame-throttled to ~24fps and a smaller puff count so iOS Safari doesn't
-  // evict the page under memory/GPU pressure.
-  (function () {
-    var c = document.getElementById('fx');
-    var ctx = c.getContext('2d', { alpha: true });
-    var W = c.width, H = c.height;
-
-    var puffs = Array.from({ length: 8 }, function () {
-      return {
-        x: Math.random() * W,
-        y: Math.random() * H,
-        r: 140 + Math.random() * 210,
-        vx: (Math.random() - 0.5) * 0.18,
-        vy: (Math.random() - 0.8) * 0.10,
-        a: 0.04 + Math.random() * 0.06,
-      };
-    });
-
-    var MIN_MS = 1000 / 24;
-    var last = 0;
-    function frame(t) {
-      if (t - last < MIN_MS) { requestAnimationFrame(frame); return; }
-      last = t;
-
-      ctx.clearRect(0, 0, W, H);
-      for (var i = 0; i < puffs.length; i++) {
-        var p = puffs[i];
-        var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
-        g.addColorStop(0, 'rgba(200,210,220,' + p.a + ')');
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fill();
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < -p.r) p.x = W + p.r;
-        if (p.x > W + p.r) p.x = -p.r;
-        if (p.y < -p.r) p.y = H + p.r;
-      }
-      requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
   })();
 </script>
 
