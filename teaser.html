@@ -3,20 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <title>BeaconTV — Teaser</title>
-<script>
-  // Emit viewport meta synchronously based on ?fit=1, before layout.
-  (function () {
-    var fit = new URLSearchParams(location.search).has('fit');
-    if (fit) document.documentElement.className += ' fit';
-    document.write(
-      '<meta name="viewport" content="' +
-      (fit
-        ? 'width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no'
-        : 'width=1080, initial-scale=1') +
-      '">'
-    );
-  })();
-</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#000000" />
 <style>
   :root {
     --bg: #05070a;
@@ -37,17 +26,15 @@
     color: var(--ink);
   }
 
-  /* ?fit=1 — scale the 1080x1920 stage to fill the device viewport.
-     Uses absolute positioning + a single transform for the pin and the scale.
-     iOS Safari mis-centers oversized grid items; this path is reliable. */
-  html.fit, html.fit body {
+  /* Scale the 1080x1920 stage to fit the viewport on any device.
+     Absolute-position pin + single-transform scale — reliable on iOS Safari. */
+  html, body {
     width: 100vw;
     height: 100dvh;
-    overflow: hidden;
     position: fixed;
     top: 0; left: 0;
   }
-  html.fit .stage {
+  .stage {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -55,9 +42,9 @@
     transform-origin: center center;
   }
 
-  /* Stage: locked to 1080x1920 (9:16 for Reels / Shorts / TikTok) */
+  /* Stage: locked to 1080x1920 (9:16 for Reels / Shorts / TikTok).
+     position/top/left/transform are set by the scale rule above. */
   .stage {
-    position: relative;
     width: 1080px;
     height: 1920px;
     background: radial-gradient(ellipse at 50% 30%, #0b1218 0%, #05070a 55%, #000 100%);
@@ -126,9 +113,11 @@
     100% { transform: translate(30px, 20px) scale(1.1); }
   }
 
-  /* Canvas for animated fog/static */
+  /* Canvas is rendered at half res (540x960) and stretched to fill the
+     stage — keeps GPU memory low enough for iOS Safari. */
   canvas.fx {
     position: absolute; inset: 0;
+    width: 100%; height: 100%;
     z-index: 6;
     mix-blend-mode: screen;
     opacity: 0.55;
@@ -430,7 +419,7 @@
 
   <!-- atmosphere -->
   <div class="fog"></div>
-  <canvas class="fx" id="fx" width="1080" height="1920"></canvas>
+  <canvas class="fx" id="fx" width="540" height="960"></canvas>
   <div class="scan"></div>
   <div class="grain"></div>
   <div class="flicker"></div>
@@ -536,11 +525,9 @@
 </div>
 
 <script>
-  // ?fit=1 → scale the 1080x1920 stage to fit the viewport (phones, embeds).
-  // The viewport meta was already set synchronously in <head>, and <html> got
-  // the .fit class there too, so we only need to keep --s in sync here.
+  // Scale the 1080x1920 stage to fit the viewport on every device.
+  // Puppeteer sets a 1080x1920 viewport, which yields scale=1 (native render).
   (function () {
-    if (!document.documentElement.classList.contains('fit')) return;
     function fit() {
       var vw = window.innerWidth;
       var vh = window.innerHeight;
@@ -557,50 +544,50 @@
 </script>
 
 <script>
-  // Animated fog + static on canvas (kept lightweight, deterministic enough for capture)
-  const c = document.getElementById('fx');
-  const ctx = c.getContext('2d');
-  const W = c.width, H = c.height;
+  // Animated fog on a half-res canvas (540x960) stretched to fill the stage.
+  // Frame-throttled to ~24fps and a smaller puff count so iOS Safari doesn't
+  // evict the page under memory/GPU pressure.
+  (function () {
+    var c = document.getElementById('fx');
+    var ctx = c.getContext('2d', { alpha: true });
+    var W = c.width, H = c.height;
 
-  // Prebuild fog puffs
-  const puffs = Array.from({length: 14}, () => ({
-    x: Math.random() * W,
-    y: Math.random() * H,
-    r: 280 + Math.random() * 420,
-    vx: (Math.random() - 0.5) * 0.25,
-    vy: (Math.random() - 0.8) * 0.15,
-    a: 0.04 + Math.random() * 0.06
-  }));
+    var puffs = Array.from({ length: 8 }, function () {
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: 140 + Math.random() * 210,
+        vx: (Math.random() - 0.5) * 0.18,
+        vy: (Math.random() - 0.8) * 0.10,
+        a: 0.04 + Math.random() * 0.06,
+      };
+    });
 
-  function frame() {
-    ctx.clearRect(0, 0, W, H);
+    var MIN_MS = 1000 / 24;
+    var last = 0;
+    function frame(t) {
+      if (t - last < MIN_MS) { requestAnimationFrame(frame); return; }
+      last = t;
 
-    // Fog
-    for (const p of puffs) {
-      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
-      g.addColorStop(0, `rgba(200,210,220,${p.a})`);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
-      p.x += p.vx; p.y += p.vy;
-      if (p.x < -p.r) p.x = W + p.r;
-      if (p.x > W + p.r) p.x = -p.r;
-      if (p.y < -p.r) p.y = H + p.r;
+      ctx.clearRect(0, 0, W, H);
+      for (var i = 0; i < puffs.length; i++) {
+        var p = puffs[i];
+        var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+        g.addColorStop(0, 'rgba(200,210,220,' + p.a + ')');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < -p.r) p.x = W + p.r;
+        if (p.x > W + p.r) p.x = -p.r;
+        if (p.y < -p.r) p.y = H + p.r;
+      }
+      requestAnimationFrame(frame);
     }
-
-    // Faint moving sparks
-    for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = `rgba(255,179,71,${0.04 + Math.random()*0.05})`;
-      const x = Math.random() * W;
-      const y = Math.random() * H;
-      ctx.fillRect(x, y, 2, 2);
-    }
-
     requestAnimationFrame(frame);
-  }
-  frame();
+  })();
 </script>
 </body>
 </html>
